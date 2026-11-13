@@ -1,1 +1,228 @@
 
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Star Dash</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #101427;
+      color: #f5f7ff;
+      font: 16px system-ui, sans-serif;
+    }
+
+    main {
+      width: min(92vw, 640px);
+      text-align: center;
+    }
+
+    h1 { margin-bottom: 8px; color: #ffd166; }
+
+    #hud {
+      display: flex;
+      justify-content: space-between;
+      margin: 12px 0;
+      font-weight: bold;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      border: 3px solid #394264;
+      border-radius: 12px;
+      background: #1a2140;
+    }
+
+    button {
+      margin-top: 14px;
+      padding: 10px 20px;
+      border: 0;
+      border-radius: 8px;
+      background: #ffd166;
+      color: #20243b;
+      font: inherit;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    p { color: #c4cbe7; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>⭐ Star Dash</h1>
+    <p>Collect stars. Avoid the red enemies!</p>
+    <div id="hud">
+      <span id="score">Stars: 0</span>
+      <span id="status">Ready?</span>
+    </div>
+    <canvas id="game" width="600" height="400"></canvas>
+    <button id="start">Start Game</button>
+    <p>Move with arrow keys or WASD. Press the button to start or play again.</p>
+  </main>
+
+  <script>
+    const canvas = document.querySelector("#game");
+    const ctx = canvas.getContext("2d");
+    const scoreLabel = document.querySelector("#score");
+    const statusLabel = document.querySelector("#status");
+    const startButton = document.querySelector("#start");
+
+    const player = { x: 300, y: 200, size: 18, speed: 3.5 };
+    const keys = new Set();
+    let star, enemies, score, playing, animationId;
+
+    function randomPosition(margin = 25) {
+      return {
+        x: margin + Math.random() * (canvas.width - margin * 2),
+        y: margin + Math.random() * (canvas.height - margin * 2)
+      };
+    }
+
+    function placeStar() {
+      star = randomPosition();
+    }
+
+    function startGame() {
+      cancelAnimationFrame(animationId);
+      player.x = canvas.width / 2;
+      player.y = canvas.height / 2;
+      score = 0;
+      enemies = [
+        { ...randomPosition(), vx: 2, vy: 1.5, size: 15 },
+        { ...randomPosition(), vx: -1.7, vy: 2, size: 15 }
+      ];
+      placeStar();
+      playing = true;
+      scoreLabel.textContent = "Stars: 0";
+      statusLabel.textContent = "Go!";
+      startButton.textContent = "Restart";
+      loop();
+    }
+
+    function drawStar(x, y, radius) {
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const angle = -Math.PI / 2 + i * Math.PI / 5;
+        const r = i % 2 === 0 ? radius : radius * 0.45;
+        const px = x + Math.cos(angle) * r;
+        const py = y + Math.sin(angle) * r;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = "#ffd166";
+      ctx.fill();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Subtle background dots
+      ctx.fillStyle = "#30395f";
+      for (let x = 20; x < canvas.width; x += 40) {
+        for (let y = 20; y < canvas.height; y += 40) {
+          ctx.fillRect(x, y, 2, 2);
+        }
+      }
+
+      drawStar(star.x, star.y, 13);
+
+      ctx.fillStyle = "#62d6a8";
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
+      ctx.fill();
+
+      for (const enemy of enemies) {
+        ctx.fillStyle = "#ff5d73";
+        ctx.beginPath();
+        ctx.arc(enemy.x, enemy.y, enemy.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function update() {
+      if (keys.has("ArrowUp") || keys.has("w")) player.y -= player.speed;
+      if (keys.has("ArrowDown") || keys.has("s")) player.y += player.speed;
+      if (keys.has("ArrowLeft") || keys.has("a")) player.x -= player.speed;
+      if (keys.has("ArrowRight") || keys.has("d")) player.x += player.speed;
+
+      player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
+      player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
+
+      for (const enemy of enemies) {
+        enemy.x += enemy.vx;
+        enemy.y += enemy.vy;
+
+        if (enemy.x < enemy.size || enemy.x > canvas.width - enemy.size) enemy.vx *= -1;
+        if (enemy.y < enemy.size || enemy.y > canvas.height - enemy.size) enemy.vy *= -1;
+
+        const distance = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+        if (distance < player.size + enemy.size) {
+          endGame();
+          return;
+        }
+      }
+
+      if (Math.hypot(player.x - star.x, player.y - star.y) < player.size + 13) {
+        score++;
+        scoreLabel.textContent = `Stars: ${score}`;
+        placeStar();
+
+        // Add a faster enemy every five stars
+        if (score % 5 === 0) {
+          enemies.push({
+            ...randomPosition(),
+            vx: 2 + Math.random(),
+            vy: 1.5 + Math.random(),
+            size: 15
+          });
+        }
+      }
+    }
+
+    function endGame() {
+      playing = false;
+      statusLabel.textContent = `Game over! Score: ${score}`;
+      draw();
+    }
+
+    function loop() {
+      if (!playing) return;
+      update();
+      draw();
+      if (playing) animationId = requestAnimationFrame(loop);
+    }
+
+    window.addEventListener("keydown", event => {
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) {
+        event.preventDefault();
+      }
+      keys.add(key);
+    });
+
+    window.addEventListener("keyup", event => {
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      keys.delete(key);
+    });
+
+    startButton.addEventListener("click", startGame);
+
+    // Show the game board before the first round
+    star = { x: 420, y: 150 };
+    enemies = [];
+    score = 0;
+    playing = false;
+    draw();
+  </script>
+</body>
+</html>
+```
